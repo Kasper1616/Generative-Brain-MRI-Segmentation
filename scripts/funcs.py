@@ -63,7 +63,6 @@ def run_model(
     test_loader,
     num_epochs=num_epochs,
     test_frequency=test_frequency,
-    lr=lr,
     device="cpu",
 ):
     """
@@ -150,7 +149,14 @@ def print_losses(test_loader, model, device):
             # move data to device
             img = img.to(device)
             mask = mask.to(device)
-            pred_mask = model(img)
+
+            # Check if model is a VAE or a regular model
+            if hasattr(model, "model"):
+                # VAE model
+                pred_mask = model.model(img)
+            else:
+                # regular model
+                pred_mask = model(img)
             total_bce += bce_loss(pred_mask, mask)
             n_batches += 1
         avg_bce = total_bce / n_batches
@@ -167,7 +173,13 @@ def print_losses(test_loader, model, device):
             mask = mask.to(device)
             # Ensure mask is binary
             mask = (mask > 0.5).float()
-            pred_mask = model(img)
+            # Check if model is a VAE or a regular model
+            if hasattr(model, "model"):
+                # VAE model
+                pred_mask = model.model(img)
+            else:
+                # regular model
+                pred_mask = model(img)
             # threshold predictions to obtain binary mask
             pred_mask = (pred_mask > 0.5).float()
             # Compute dice per sample
@@ -180,10 +192,10 @@ def print_losses(test_loader, model, device):
         print("")
 
         # print elbo loss if available
-        if hasattr(model, "elbo"):
+        if hasattr(model, "model"):
             print("ELBO loss:")
             optimizer = Adam({"lr": lr})
             svi = SVI(model.model, model.guide, optimizer, loss=Trace_ELBO())
-            evaluate(svi, test_loader, device)
+            print(np.round(evaluate(svi, test_loader, device), 2))
         else:
             print("No ELBO loss available.")
