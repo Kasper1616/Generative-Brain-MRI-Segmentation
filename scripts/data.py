@@ -112,6 +112,9 @@ def get_loaders(
     train_ds = MRIDataset(train_df, img_transform=img_transforms, mask_transform=mask_transforms)
     test_ds = MRIDataset(test_df, img_transform=img_transforms, mask_transform=mask_transforms)
 
+    print(f"Train set size: {len(train_ds)}")
+    print(f"Test set size: {len(test_ds)}")
+
     # --- DataLoaders ---
     train_loader = DataLoader(
         train_ds,
