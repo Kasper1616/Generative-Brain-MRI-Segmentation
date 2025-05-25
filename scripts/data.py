@@ -6,13 +6,14 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 # Define the MRIDataset class
 class MRIDataset(Dataset):
-    def __init__(self, df, img_transform=None, mask_transform=None):
+    def __init__(self, df, transform=None):
         self.df = df.reset_index(drop=True)
-        self.img_transform = img_transform
-        self.mask_transform = mask_transform
+        self.transforms = transform
 
     def __len__(self):
         return len(self.df)
@@ -21,17 +22,23 @@ class MRIDataset(Dataset):
         img_path = self.df.loc[idx, "image_path"]
         mask_path = self.df.loc[idx, "mask_path"]
 
-        img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+        img = cv2.imread(img_path)
+        mask = cv2.imread(mask_path, 0)  # Read mask as grayscale
+
+        augmented = self.transforms(image=img, 
+                                    mask=mask)
+ 
+        image = augmented['image']
+        mask = augmented['mask']
+
+        mask = mask.float() / 255.0
+        mask = mask.unsqueeze(0)
+        return image, mask
+
+
+def diagnosis(mask_path):
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-
-        img = Image.fromarray(img)
-        mask = Image.fromarray(mask).convert("L")
-
-        if self.img_transform:   img = self.img_transform(img)
-        if self.mask_transform:  mask = self.mask_transform(mask)
-
-        return img, mask
-
+        return int(np.max(mask) != 0)
 
 def get_loaders(
     data_dir: str,
@@ -84,21 +91,20 @@ def get_loaders(
         "mask_path": masks,
     })
 
-    def diagnosis(mask_path):
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-        return int(np.max(mask) != 0)
 
     df_final["diagnosis"] = df_final["mask_path"].apply(diagnosis)
 
     # --- Transforms ---
-    img_transforms = transforms.Compose([
-        transforms.Resize((img_size, img_size)),
-        transforms.ToTensor(),
-    ])
-    mask_transforms = transforms.Compose([
-        transforms.Resize((img_size, img_size)),
-        transforms.ToTensor(),
-    ])
+    transforms = A.Compose([
+        A.Resize(width = img_size, height = img_size, p=1.0),
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.RandomRotate90(p=0.5),
+        A.Transpose(p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=0, p=0.25),
+        A.Normalize(p=1.0),
+        ToTensorV2()
+        ])
 
     # --- Split data ---
     train_df, test_df = train_test_split(
@@ -109,8 +115,8 @@ def get_loaders(
     )
 
     # --- Create datasets ---
-    train_ds = MRIDataset(train_df, img_transform=img_transforms, mask_transform=mask_transforms)
-    test_ds = MRIDataset(test_df, img_transform=img_transforms, mask_transform=mask_transforms)
+    train_ds = MRIDataset(train_df, transform=transforms)
+    test_ds = MRIDataset(test_df, transform=transforms)
 
     print(f"Train set size: {len(train_ds)}")
     print(f"Test set size: {len(test_ds)}")

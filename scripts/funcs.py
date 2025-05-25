@@ -135,7 +135,7 @@ def trace_elbo(model, data):
     return elbo.differentiable_loss(model, data)
 
 
-def print_losses(test_loader, model, predict, device):
+def print_losses(test_loader, model, predict=None, device="cpu"):
     """
     Print the losses for the test set.
     :param test_loader: test data loader
