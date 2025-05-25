@@ -10,7 +10,7 @@ test_frequency = 10
 lr = 1e-3
 
 
-def train(svi, train_loader, device):
+def train(svi, train_loader, beta=1, device="cpu"):
     """
     Train the model for one epoch.
     :param svi: SVI object
@@ -25,8 +25,8 @@ def train(svi, train_loader, device):
         img = img.to(device)
         mask = mask.to(device)
 
-        # do ELBO gradient and accumulate loss
-        epoch_loss += svi.step(img, mask)
+        
+        epoch_loss += svi.step(img, mask, beta=beta)
 
     # return epoch loss
     normalizer_train = len(train_loader.dataset)
@@ -63,6 +63,7 @@ def run_model(
     test_loader,
     num_epochs=num_epochs,
     test_frequency=test_frequency,
+    warmup_epochs=None,
     device="cpu",
 ):
     """
@@ -84,12 +85,14 @@ def run_model(
     test_elbo = []
     # training loop
     for epoch in range(num_epochs):
-        total_epoch_loss_train = train(svi, train_loader, device)
+        beta = min(1.0, epoch / warmup_epochs) if warmup_epochs else 1.0
+        total_epoch_loss_train = train(svi, train_loader, beta=beta, device=device)
         train_elbo.append(-total_epoch_loss_train)
         print(f"[Epoch {epoch + 1}]")
-        print("Mean train loss: %.4f" % total_epoch_loss_train)
+        print("Mean training elbo: %.4f" % total_epoch_loss_train)
+        print("Beta: %.4f" % beta)
 
-        if epoch % test_frequency == 0:
+        if (epoch + 1) % test_frequency == 0:
             # report test diagnostics
             total_epoch_loss_test = evaluate(svi, test_loader, device)
             test_elbo.append(-total_epoch_loss_test)
@@ -132,7 +135,7 @@ def trace_elbo(model, data):
     return elbo.differentiable_loss(model, data)
 
 
-def print_losses(test_loader, model, device):
+def print_losses(test_loader, model, predict, device):
     """
     Print the losses for the test set.
     :param test_loader: test data loader
@@ -153,7 +156,7 @@ def print_losses(test_loader, model, device):
             # Check if model is a VAE or a regular model
             if hasattr(model, "model"):
                 # VAE model
-                pred_mask = model.model(img)
+                pred_mask = predict(img)
             else:
                 # regular model
                 pred_mask = model(img)
