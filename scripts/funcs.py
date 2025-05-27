@@ -10,7 +10,7 @@ test_frequency = 10
 lr = 1e-3
 
 
-def train(svi, train_loader, beta=1, device="cpu"):
+def train(svi, train_loader, beta=1, latents=["latent"], device="cpu"):
     """
     Train the model for one epoch.
     :param svi: SVI object
@@ -26,7 +26,8 @@ def train(svi, train_loader, beta=1, device="cpu"):
         mask = mask.to(device)
 
         
-        epoch_loss += svi.step(img, mask, beta=beta)
+        epoch_loss += svi.step(img, mask, beta=beta, 
+                               latents_to_anneal=latents)
 
     # return epoch loss
     normalizer_train = len(train_loader.dataset)
@@ -64,6 +65,7 @@ def run_model(
     num_epochs=num_epochs,
     test_frequency=test_frequency,
     warmup_epochs=None,
+    latents=["latent"],
     device="cpu",
 ):
     """
@@ -86,7 +88,7 @@ def run_model(
     # training loop
     for epoch in range(num_epochs):
         beta = min(1.0, epoch / warmup_epochs) if warmup_epochs else 1.0
-        total_epoch_loss_train = train(svi, train_loader, beta=beta, device=device)
+        total_epoch_loss_train = train(svi, train_loader, beta=beta, latents=latents, device=device)
         train_elbo.append(-total_epoch_loss_train)
         print(f"[Epoch {epoch + 1}]")
         print("Mean training elbo: %.4f" % total_epoch_loss_train)
