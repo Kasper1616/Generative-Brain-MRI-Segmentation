@@ -65,6 +65,7 @@ def run_model(
     num_epochs=num_epochs,
     test_frequency=test_frequency,
     warmup_epochs=None,
+    cycle_length=None,
     latents=["latent"],
     device="cpu",
 ):
@@ -87,7 +88,18 @@ def run_model(
     test_elbo = []
     # training loop
     for epoch in range(num_epochs):
-        beta = min(1.0, epoch / warmup_epochs) if warmup_epochs else 1.0
+        if warmup_epochs:                           # one‑shot linear warm‑up
+            beta = min(1.0, epoch / warmup_epochs)
+        
+        elif cycle_length:                          # cyclic warm‑up / plateau
+            cycle_pos = epoch % cycle_length
+            ramp_len = cycle_length // 2         # first half of cycle is ramp
+            beta = min(1.0, cycle_pos / ramp_len)
+        else:                                       # no annealing
+            beta = 1.0
+
+            
+
         total_epoch_loss_train = train(svi, train_loader, beta=beta, latents=latents, device=device)
         train_elbo.append(-total_epoch_loss_train)
         print(f"[Epoch {epoch + 1}]")
